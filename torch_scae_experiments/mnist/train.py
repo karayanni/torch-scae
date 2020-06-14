@@ -36,7 +36,7 @@ class SCAEMNIST(LightningModule):
     def __init__(self, hparams):
         super().__init__()
         self.hparams = hparams
-        self.scae = factory.make_scae(hparams.model_config)
+        self.model = factory.make_scae(hparams.model_config)
 
     @staticmethod
     def add_model_specific_args(parent_parser):
@@ -58,24 +58,37 @@ class SCAEMNIST(LightningModule):
         return parser
 
     def forward(self, image):
-        return self.scae(image=image)
+        return self.model(image=image)
 
     def configure_optimizers(self):
+        lr = self.hparams.learning_rate
+
+        groups = [
+            dict(params=self.model.part_encoder.parameters(), lr=lr * 10),
+            dict(params=self.model.template_generator.parameters(), lr=lr * 10),
+            dict(params=self.model.part_decoder.parameters(), lr=lr * 10),
+            dict(params=self.model.obj_encoder.parameters(), lr=lr),
+            dict(params=self.model.obj_decoder.parameters(), lr=lr),
+        ]
+        if self.model.n_classes is not None:
+            groups.append(dict(params=self.model.prior_classifier.parameters(), lr=lr))
+            groups.append(dict(params=self.model.posterior_classifier.parameters(), lr=lr))
+
         eps = 1e-2 / float(self.hparams.batch_size) ** 2
         if self.hparams.optimizer_type == "RMSprop":
-            optimizer = RMSprop(self.parameters(),
-                                lr=self.hparams.learning_rate,
+            optimizer = RMSprop(groups,
+                                lr=lr,
                                 momentum=0.9,
                                 eps=eps,
                                 weight_decay=self.hparams.weight_decay)
         elif self.hparams.optimizer_type == "RAdam":
-            optimizer = RAdam(self.parameters(),
-                              lr=self.hparams.learning_rate,
+            optimizer = RAdam(groups,
+                              lr=lr,
                               eps=eps,
                               weight_decay=self.hparams.weight_decay)
         elif self.hparams.optimizer_type == "Adam":
-            optimizer = Adam(self.parameters(),
-                             lr=self.hparams.learning_rate,
+            optimizer = Adam(groups,
+                             lr=lr,
                              eps=eps,
                              weight_decay=self.hparams.weight_decay)
         else:
@@ -161,10 +174,10 @@ class SCAEMNIST(LightningModule):
         reconstruction_target = image
 
         res = self(image=image)
-        loss, loss_info = self.scae.loss(res,
-                                         reconstruction_target=reconstruction_target,
-                                         label=label)
-        accuracy = self.scae.calculate_accuracy(res, label)
+        loss, loss_info = self.model.loss(res,
+                                          reconstruction_target=reconstruction_target,
+                                          label=label)
+        accuracy = self.model.calculate_accuracy(res, label)
 
         log = dict(
             loss=loss.detach(),
@@ -178,10 +191,10 @@ class SCAEMNIST(LightningModule):
         reconstruction_target = image
 
         res = self(image=image)
-        loss, loss_info = self.scae.loss(res,
-                                         reconstruction_target=reconstruction_target,
-                                         label=label)
-        accuracy = self.scae.calculate_accuracy(res, label)
+        loss, loss_info = self.model.loss(res,
+                                          reconstruction_target=reconstruction_target,
+                                          label=label)
+        accuracy = self.model.calculate_accuracy(res, label)
 
         out = {'val_loss': loss, 'accuracy': accuracy}
 
@@ -236,10 +249,10 @@ class SCAEMNIST(LightningModule):
         reconstruction_target = image
 
         res = self(image=image)
-        loss = self.scae.loss(res,
-                              reconstruction_target=reconstruction_target,
-                              label=label)
-        accuracy = self.scae.calculate_accuracy(res, label)
+        loss = self.model.loss(res,
+                               reconstruction_target=reconstruction_target,
+                               label=label)
+        accuracy = self.model.calculate_accuracy(res, label)
 
         return {'test_loss': loss, 'accuracy': accuracy}
 
