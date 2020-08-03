@@ -180,7 +180,7 @@ class TemplateBasedImageDecoder(nn.Module):
             warnings.simplefilter('ignore')
             affine_grids = F.affine_grid(affine_matrices, target_size)
             transformed_templates = F.grid_sample(
-                templates, affine_grids, align_corners=False)
+                templates, affine_grids, align_corners=True)
         transformed_templates = transformed_templates.view(
             batch_size, n_templates, *target_size[1:])
         del templates, target_size, affine_matrices
@@ -203,7 +203,7 @@ class TemplateBasedImageDecoder(nn.Module):
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore')
                 template_mixing_logits = F.grid_sample(
-                    template_mixing_logits, affine_grids, align_corners=False)
+                    template_mixing_logits, affine_grids, align_corners=True)
             template_mixing_logits = template_mixing_logits.view(
                 batch_size, n_templates, *template_mixing_logits.shape[1:])
 
