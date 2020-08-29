@@ -5,6 +5,7 @@ from torch_scae.part_decoder import TemplateGenerator, TemplateBasedImageDecoder
 from torch_scae.part_encoder import CNNEncoder, CapsuleImageEncoder
 from torch_scae.set_transformer import SetTransformer
 from torch_scae.stacked_capsule_auto_encoder import SCAE
+from torch import cuda
 
 
 def make_config(
@@ -154,6 +155,8 @@ def make_scae(config):
         config = Namespace(**config)
 
     cnn_encoder = CNNEncoder(**config.pcae_cnn_encoder)
+    #cnn_encoder.to(device=cuda.current_device())
+
     part_encoder = CapsuleImageEncoder(
         encoder=cnn_encoder,
         **config.pcae_encoder
