@@ -15,6 +15,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch import cuda
 
 from torch_scae.object_decoder import sparsity_loss
 
@@ -48,6 +49,12 @@ class SCAE(nn.Module):
             reconstruct_alternatives=True,
     ):
         super().__init__()
+
+        #part_encoder = part_encoder.to(device=cuda.current_device())
+        #template_generator = template_generator.to(device=cuda.current_device())
+        #part_decoder = part_decoder.to(device=cuda.current_device())
+        #obj_encoder = obj_encoder.to(device=cuda.current_device())
+        #obj_decoder = obj_decoder.to(device=cuda.current_device())
 
         self.part_encoder = part_encoder
         self.template_generator = template_generator
@@ -285,6 +292,13 @@ class SCAE(nn.Module):
             log.update(prior_cls_xe=prior_cls_xe, posterior_cls_xe=posterior_cls_xe)
 
         return loss, log
+
+    def predict(self, res):
+        prior_pred = res.prior_cls_prob.argmax(-1)
+        posterior_pred = res.posterior_cls_prob.argmax(-1)
+
+        return dict(prior = prior_pred,
+                    posterior = posterior_pred)
 
     def calculate_accuracy(self, res, label: torch.Tensor):
         prior_pred = res.prior_cls_prob.argmax(-1)
