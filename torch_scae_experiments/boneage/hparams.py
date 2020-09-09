@@ -51,9 +51,9 @@ model_params = dict(
         cpr_dynamic_reg_weight=10,
         prior_sparsity_loss_type='l2',
         prior_within_example_sparsity_weight=2.0,
-        prior_between_example_sparsity_weight=0.35,
+        prior_between_example_sparsity_weight=0.2, #from 0.35 to 0.2 
         posterior_sparsity_loss_type='entropy',
-        posterior_within_example_sparsity_weight=0.7,
+        posterior_within_example_sparsity_weight=0.5, #from 0.7 to 0.5 
         posterior_between_example_sparsity_weight=0.2,
         reconstruct_alternatives=False,
     )
