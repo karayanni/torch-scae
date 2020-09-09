@@ -33,7 +33,7 @@ from torch_scae.factory import make_config
 from torch_scae.optimizers import RAdam, LookAhead
 
 
-class SCAEMNIST(LightningModule):
+class SCAEBONEAGE(LightningModule):
     def __init__(self, hparams):
         super().__init__()
         self.hparams = hparams
@@ -100,17 +100,23 @@ class SCAEMNIST(LightningModule):
         image_size = self.hparams.model_config['image_shape'][1:]
         output_size = self.hparams.model_config['image_shape'][1:]
 
-        if output_size[0] != image_size[0]:
-            #padding = tuple((output_size[i] - image_size[i]) // 2 for i in range(len(output_size)))
-            #translate = tuple(p / o for p, o in zip(padding, output_size))
+        # if output_size[0] != image_size[0]:
+        #     padding = tuple((output_size[i] - image_size[i]) // 2 for i in range(len(output_size)))
+        #     translate = tuple(p / o for p, o in zip(padding, output_size))
+        #
+        #     transforms = torchvision.transforms.Compose([
+        #         torchvision.transforms.Pad(padding, fill=0, padding_mode='constant'),
+        #         torchvision.transforms.RandomAffine(degrees=0, translate=translate, fillcolor=0),
+        #         torchvision.transforms.Grayscale(),
+        #         torchvision.transforms.ToTensor(),
+        #     ])
+        # else:
 
-            transforms = torchvision.transforms.Compose([
-                #torchvision.transforms.Pad(padding, fill=0, padding_mode='constant'),
-                #torchvision.transforms.RandomAffine(degrees=0, translate=translate, fillcolor=0),
-                torchvision.transforms.ToTensor(),
-            ])
-        else:
-            transforms = torchvision.transforms.ToTensor()
+        transforms = torchvision.transforms.Compose([
+            torchvision.transforms.Grayscale(),
+            torchvision.transforms.ToTensor(),
+        ])
+
 
         return transforms
 
@@ -283,7 +289,7 @@ def train(model_params, **training_kwargs):
 
     hparams = dict(model_config=model_config)
     hparams.update(training_params)
-    model = SCAEMNIST(Namespace(**hparams))
+    model = SCAEBONEAGE(Namespace(**hparams))
 
     if 'save_top_k' in training_params:
         checkpoint_callback = ModelCheckpoint(
@@ -301,7 +307,7 @@ def parse_args(argv=None):
     parser = ArgumentParser()
 
     # add model specific args
-    parser = SCAEMNIST.add_model_specific_args(parser)
+    parser = SCAEBONEAGE.add_model_specific_args(parser)
 
     # add all the available trainer options to parser
     parser = Trainer.add_argparse_args(parser)
@@ -317,7 +323,7 @@ def parse_args(argv=None):
 if __name__ == '__main__':
     import sys
 
-    from torch_scae_experiments.mnist.hparams import model_params
+    from torch_scae_experiments.boneage.hparams import model_params
 
     seed_everything(42)
 
