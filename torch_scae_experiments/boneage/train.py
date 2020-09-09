@@ -292,9 +292,15 @@ def train(model_params, **training_kwargs):
     model = SCAEBONEAGE(Namespace(**hparams))
 
     if 'save_top_k' in training_params:
-        checkpoint_callback = ModelCheckpoint(
-            save_top_k=training_params['save_top_k'])
-        training_params.update(checkpoint_callback=checkpoint_callback)
+        if('using_colab' in training_params):
+            del training_params['using_colab']
+            checkpoint_callback = ModelCheckpoint(
+                filepath="/content/drive/My Drive/data/boneage",
+                save_top_k=training_params['save_top_k'])
+        else:
+            checkpoint_callback = ModelCheckpoint(
+                save_top_k=training_params['save_top_k'])
+            training_params.update(checkpoint_callback=checkpoint_callback)
         del training_params['save_top_k']
 
     trainer = Trainer(**training_params)
