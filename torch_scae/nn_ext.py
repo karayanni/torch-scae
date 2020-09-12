@@ -15,6 +15,37 @@
 import torch.nn as nn
 import torch.nn.functional as F
 
+def MLP_regression(input_size, hidden_sizes, inner_activation='relu', final_activation=None, bias=True, dropout=0):
+    n = len(hidden_sizes)
+    assert n >= 1, "There must be at least one hidden layer"
+
+    if inner_activation == 'relu':
+        inner_activation = nn.ReLU
+    if inner_activation == 'softmax':
+        inner_activation = nn.Softmax
+    if inner_activation == 'sigmoid':
+        inner_activation = nn.Sigmoid
+
+    if final_activation == 'relu':
+        final_activation = nn.ReLU
+    if final_activation == 'softmax':
+        final_activation = nn.Softmax
+    if final_activation == 'sigmoid':
+        final_activation = nn.Sigmoid
+
+    layers = [nn.Linear(input_size, hidden_sizes[0]), inner_activation()]
+    for j in range(n - 1):
+        layers.append(nn.Linear(hidden_sizes[j], hidden_sizes[j + 1], bias=bias))
+        if dropout > 0:
+            layers.append(nn.Dropout(dropout))
+        layers.append(inner_activation())
+    layers.pop()
+
+    if final_activation is not None:
+        layers.append(final_activation())
+
+    return nn.Sequential(*layers)
+
 
 def MLP(sizes, activation=nn.ReLU, activate_final=True, bias=True):
     n = len(sizes)

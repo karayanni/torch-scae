@@ -1,8 +1,16 @@
 model_params = dict(
     image_shape=(1, 256, 256),
-    n_classes=1,
     n_part_caps=30,
     n_obj_caps=16,
+    scae_regression_params=dict(
+        is_active=True,
+        loss='mse',
+        attention_hp=1,
+    ),
+    scae_classification_params=dict(
+        is_active=False,
+        n_classes=1,
+    ),
     pcae_cnn_encoder_params=dict(
         out_channels=[128] * 4,
         kernel_sizes=[3, 3, 3, 3],
@@ -31,6 +39,13 @@ model_params = dict(
         dim_hidden=16,
         dim_out=256,
         layer_norm=True,
+    ),
+    obj_age_regressor_params=dict(
+        hidden_sizes=[128, 64, 1],
+        inner_activation='relu',
+        final_activation=None,
+        bias=True,
+        dropout=0,
     ),
     ocae_decoder_capsule_params=dict(
         dim_caps=32,
