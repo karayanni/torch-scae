@@ -4,15 +4,15 @@ from torch_scae.object_decoder import CapsuleLayer, CapsuleObjectDecoder
 from torch_scae.part_decoder import TemplateGenerator, TemplateBasedImageDecoder
 from torch_scae.part_encoder import CNNEncoder, CapsuleImageEncoder
 from torch_scae.set_transformer import SetTransformer
+from torch_scae.nn_utils import nn_ext
 from torch_scae.stacked_capsule_auto_encoder import SCAE
-from torch import cuda
-
 
 def make_config(
         image_shape,
-        n_classes,
         n_part_caps,
         n_obj_caps,
+        scae_regression_params=None,
+        scae_classification_params=None,
         pcae_cnn_encoder_params=None,
         pcae_encoder_params=None,
         pcae_template_generator_params=None,
@@ -21,7 +21,12 @@ def make_config(
         ocae_decoder_capsule_params=None,
         scae_params=None,
 
+        obj_age_regressor_params=None,
+
 ):
+    scae_classification = scae_classification_params or dict()
+    scae_regression = scae_regression_params or dict()
+
     pcae_cnn_encoder_params = pcae_cnn_encoder_params or dict()
     pcae_encoder_params = pcae_encoder_params or dict()
     pcae_template_generator_params = pcae_template_generator_params or dict()
@@ -29,6 +34,7 @@ def make_config(
     ocae_encoder_set_transformer_params = ocae_encoder_set_transformer_params or dict()
     ocae_decoder_capsule_params = ocae_decoder_capsule_params or dict()
     scae_params = scae_params or dict()
+    obj_age_regressor_params = obj_age_regressor_params or dict()
 
     assert 'input_shape' not in pcae_cnn_encoder_params
     pcae_cnn_encoder = dict(
@@ -99,6 +105,21 @@ def make_config(
     )
     ocae_encoder_set_transformer.update(ocae_encoder_set_transformer_params)
 
+    reg_input_size = (
+        (1 +     #presence
+        pcae_encoder['n_poses'])*n_part_caps +  #n_poses
+        ocae_encoder_set_transformer['dim_out']*n_obj_caps
+    )
+    obj_age_regressor = dict(
+        input_size=reg_input_size,
+        hidden_sizes=[128, 64, 1],
+        inner_activation='relu',
+        final_activation=None,
+        bias=True,
+        dropout=0,
+    )
+    obj_age_regressor.update(obj_age_regressor_params)
+
     assert 'n_caps' not in ocae_decoder_capsule_params
     assert 'dim_feature' not in ocae_decoder_capsule_params
     assert 'n_votes' not in ocae_decoder_capsule_params
@@ -118,7 +139,10 @@ def make_config(
     ocae_decoder_capsule.update(ocae_decoder_capsule_params)
 
     assert 'n_classes' not in scae_params
+    n_classes = scae_classification_params['n_classes']
     scae = dict(
+        enable_classification=scae_classification_params['is_active'],
+        enable_regression=scae_regression_params['is_active'],
         n_classes=n_classes,
         vote_type='enc',
         presence_type='enc',
@@ -140,11 +164,16 @@ def make_config(
         n_classes=n_classes,
         n_part_caps=n_part_caps,
         n_obj_caps=n_obj_caps,
+
+        classification=scae_classification,
+        regression=scae_regression,
+
         pcae_cnn_encoder=pcae_cnn_encoder,
         pcae_encoder=pcae_encoder,
         pcae_template_generator=pcae_template_generator,
         pcae_decoder=pcae_decoder,
         ocae_encoder_set_transformer=ocae_encoder_set_transformer,
+        obj_age_regressor=obj_age_regressor,
         ocae_decoder_capsule=ocae_decoder_capsule,
         scae=scae,
     )
@@ -155,7 +184,6 @@ def make_scae(config):
         config = Namespace(**config)
 
     cnn_encoder = CNNEncoder(**config.pcae_cnn_encoder)
-    #cnn_encoder.to(device=cuda.current_device())
 
     part_encoder = CapsuleImageEncoder(
         encoder=cnn_encoder,
@@ -167,6 +195,8 @@ def make_scae(config):
 
     obj_encoder = SetTransformer(**config.ocae_encoder_set_transformer)
 
+    obj_age_regressor = nn_ext.MLP_regression(**config.obj_age_regressor)
+
     obj_decoder_capsule = CapsuleLayer(**config.ocae_decoder_capsule)
     obj_decoder = CapsuleObjectDecoder(obj_decoder_capsule)
 
@@ -176,6 +206,9 @@ def make_scae(config):
         part_decoder=part_decoder,
         obj_encoder=obj_encoder,
         obj_decoder=obj_decoder,
+
+        obj_age_regressor=obj_age_regressor,
+
         **config.scae
     )
 

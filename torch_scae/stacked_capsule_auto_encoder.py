@@ -29,7 +29,10 @@ class SCAE(nn.Module):
             template_generator,
             part_decoder,
             obj_encoder,
+            obj_age_regressor,
             obj_decoder,
+            enable_classification=False,
+            enable_regression=True,
             n_classes=None,
             vote_type='soft',
             presence_type='enc',
@@ -50,16 +53,15 @@ class SCAE(nn.Module):
     ):
         super().__init__()
 
-        #part_encoder = part_encoder.to(device=cuda.current_device())
-        #template_generator = template_generator.to(device=cuda.current_device())
-        #part_decoder = part_decoder.to(device=cuda.current_device())
-        #obj_encoder = obj_encoder.to(device=cuda.current_device())
-        #obj_decoder = obj_decoder.to(device=cuda.current_device())
-
         self.part_encoder = part_encoder
         self.template_generator = template_generator
         self.part_decoder = part_decoder
         self.obj_encoder = obj_encoder
+
+        self.enable_classification = enable_classification
+        self.enable_regression = enable_regression
+        self.obj_age_regressor = obj_age_regressor
+
         self.obj_decoder = obj_decoder
 
         self.n_classes = n_classes
@@ -70,7 +72,8 @@ class SCAE(nn.Module):
         self.stop_grad_caps_input = stop_grad_caps_input
         self.stop_grad_caps_target = stop_grad_caps_target
 
-        if n_classes:
+        if self.enable_classification:
+            assert n_classes is not None
             self.prior_classifier = nn.Sequential(
                 nn.Linear(obj_decoder.n_obj_capsules, n_classes),
                 nn.Softmax(-1),
@@ -130,16 +133,24 @@ class SCAE(nn.Module):
 
         parts_with_templates = torch.cat([input_part_param, input_templates], -1)
 
-        obj_encoding = self.obj_encoder(parts_with_templates, input_presence)
+        obj_encoding = self.obj_encoder(parts_with_templates, input_presence) # (B,n_obj_caps,V)
         del input_part_param, input_templates, parts_with_templates, input_presence
 
         # Decode parts poses and presences from object encoding
-        target_pose, target_presence = part_enc_res.pose, part_enc_res.presence
+        target_pose, target_presence = part_enc_res.pose, part_enc_res.presence #(B,n_part_caps,P), (B,n_part_caps)
         if self.stop_grad_caps_target:
             target_pose = target_pose.detach()
             target_presence = target_presence.detach()
 
         res = self.obj_decoder(obj_encoding, target_pose, target_presence)
+
+        #Send object-part information for age regression
+        part_obj_vec = torch.cat((obj_encoding.view(batch_size, -1),
+                                        target_pose.view(batch_size, -1),
+                                        target_presence.view(batch_size, -1)), dim=-1)
+
+        res.age_pred = self.obj_age_regressor(part_obj_vec)
+
         del obj_encoding, target_pose, target_presence
 
         res.part_presence = part_enc_res.presence
@@ -207,7 +218,8 @@ class SCAE(nn.Module):
         res.template_presence = part_enc_res.presence
         res.transformed_templates = res.rec.transformed_templates
 
-        if self.n_classes is not None:
+        if self.enable_classification:
+            assert self.n_classes is not None
             assert self.prior_classifier is not None
             assert self.posterior_classifier is not None
 
@@ -282,7 +294,8 @@ class SCAE(nn.Module):
         log.update(cpr_dynamic_reg_loss=res.cpr_dynamic_reg_loss)
 
         # classification losses
-        if label is not None:
+        if self.enable_classification:
+            assert label is not None
             assert self.n_classes is not None
 
             prior_cls_xe = F.cross_entropy(res.prior_cls_prob, target=label)
@@ -291,14 +304,23 @@ class SCAE(nn.Module):
             loss += prior_cls_xe + posterior_cls_xe
             log.update(prior_cls_xe=prior_cls_xe, posterior_cls_xe=posterior_cls_xe)
 
+        #regression loss
+        if self.enable_regression:
+            assert label is not None
+            mae_age_loss = torch.nn.L1Loss(reduction='mean')
+            mae_age = mae_age_loss(label, (res.age_pred).squeeze(-1))
+
+            loss += mae_age
+            log.update(mae_age=mae_age)
+
         return loss, log
 
     def predict(self, res):
         prior_pred = res.prior_cls_prob.argmax(-1)
         posterior_pred = res.posterior_cls_prob.argmax(-1)
 
-        return dict(prior = prior_pred,
-                    posterior = posterior_pred)
+        return dict(prior=prior_pred,
+                    posterior=posterior_pred)
 
     def calculate_accuracy(self, res, label: torch.Tensor):
         prior_pred = res.prior_cls_prob.argmax(-1)

@@ -13,6 +13,8 @@
 # limitations under the License.
 
 import gc
+import os
+import csv
 import math
 import pathlib
 from argparse import ArgumentParser, Namespace
@@ -180,15 +182,18 @@ class SCAEBONEAGE(LightningModule):
         loss, loss_info = self.scae.loss(res,
                                          reconstruction_target=reconstruction_target,
                                          label=label)
-        accuracy = self.scae.calculate_accuracy(res, label)
-        cls_pred = self.scae.predict(res)
-
         log = dict(
             loss=loss.detach(),
-            accuracy=accuracy.detach(),
             **loss_info
         )
-        out = {'loss': loss, 'log': log, 'prediction': cls_pred}
+        out = {'loss': loss, 'log': log}
+
+        if model_params['scae_classification_params']['is_active']:
+            accuracy = self.scae.calculate_accuracy(res, label)
+            cls_pred = self.scae.predict(res)
+            log['accuracy'] = accuracy.detach()
+            out['log'] = log
+            out['prediction'] = cls_pred
 
         if batch_idx == 0:
             res.image = image
@@ -198,17 +203,18 @@ class SCAEBONEAGE(LightningModule):
 
     def validation_step(self, batch, batch_idx):
         image, label = batch
-        #mage.to(device=cuda.current_device())
         reconstruction_target = image
 
         res = self(image=image)
         loss, loss_info = self.scae.loss(res,
                                          reconstruction_target=reconstruction_target,
                                          label=label)
-        accuracy = self.scae.calculate_accuracy(res, label)
-        cls_pred = self.scae.predict(res)
-
-        out = {'val_loss': loss, 'accuracy': accuracy, 'prediction': cls_pred}
+        out = {'val_loss': loss}
+        if model_params['scae_classification_params']['is_active']:
+            accuracy = self.scae.calculate_accuracy(res, label)
+            cls_pred = self.scae.predict(res)
+            out['accuracy'] = accuracy
+            out['prediction'] = cls_pred
 
         if batch_idx == 0:
             res.image = image
@@ -216,11 +222,16 @@ class SCAEBONEAGE(LightningModule):
         return out
 
     def validation_epoch_end(self, outputs):
+
         avg_loss = torch.stack([x['val_loss'] for x in outputs]).mean()
-        avg_acc = torch.stack([x['accuracy'] for x in outputs]).mean()
-        log = {'val_loss': avg_loss, 'val_accuracy': avg_acc}
+        log = {'val_loss': avg_loss}
+
+        if model_params['scae_classification_params']['is_active']:
+            avg_acc = torch.stack([x['accuracy'] for x in outputs]).mean()
+            log['val_accuracy'] = avg_acc
+
         res = outputs[0]['result']
-        pred = outputs[0]['prediction']
+
 
 
 
@@ -257,9 +268,6 @@ class SCAEBONEAGE(LightningModule):
         self.logger.experiment.add_image(
             'transformed_templates', ttg, self.current_epoch)
 
-        #print(rg)
-        print(pred)
-
         return {'val_loss': avg_loss, 'log': log}
 
     def test_step(self, batch, batch_idx):
@@ -276,8 +284,12 @@ class SCAEBONEAGE(LightningModule):
 
     def test_epoch_end(self, outputs):
         avg_loss = torch.stack([x['test_loss'] for x in outputs]).mean()
-        avg_acc = torch.stack([x['accuracy'] for x in outputs]).mean()
-        log = {'test_loss': avg_loss, 'test_accuracy': avg_acc}
+        log = {'test_loss': avg_loss}
+
+        if model_params['scae_classification_params']['is_active']:
+            avg_acc = torch.stack([x['accuracy'] for x in outputs]).mean()
+            log['test_accuracy'] = avg_acc
+
         return {'test_loss': avg_loss, 'log': log}
 
 
@@ -306,7 +318,6 @@ def train(model_params, **training_kwargs):
     trainer = Trainer(**training_params)
     trainer.fit(model)
 
-
 def parse_args(argv=None):
     argv = argv or []
 
@@ -324,6 +335,34 @@ def parse_args(argv=None):
     args = parser.parse_args(argv)
 
     return args
+
+def get_bone_info(self, is_test = False):
+    """
+        extracts bone's info from the bones csv file and returns two dictionaries bones_ages_dict , bones_is_male_dict
+        that given the bone's id return it's age and it's gender
+            --test file doesn't contain the ages of the bones, we should consider this.
+    """
+    if(is_test):
+        raise NotImplementedError
+
+    file_name = "boneage-test-dataset.csv" if is_test else "boneage-training-dataset.csv"
+
+    with open(os.path.dirname(os.path.realpath(__file__)) + '' + file_name) as csv_file:
+        csv_reader = csv.reader(csv_file, delimiter=',')
+        line_count = 0
+        bones_ages_dict = {}
+        bones_is_male_dict = {}
+        for row in csv_reader:
+            if line_count == 0:
+                line_count += 1
+            else:
+                bone_id = int(row[0])
+                bone_age = int(row[1])
+                is_male = bool(row[2])
+                bones_ages_dict[bone_id] = bone_age
+                bones_is_male_dict[bone_id] = is_male
+
+    return bones_ages_dict, bones_is_male_dict
 
 
 if __name__ == '__main__':
