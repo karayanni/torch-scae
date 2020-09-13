@@ -188,7 +188,7 @@ class SCAEBONEAGE(LightningModule):
         )
         out = {'loss': loss, 'log': log}
 
-        if model_params['scae_classification_params']['is_active']:
+        if self.scae.enable_classification:
             accuracy = self.scae.calculate_accuracy(res, label)
             cls_pred = self.scae.predict(res)
             log['accuracy'] = accuracy.detach()
@@ -210,7 +210,7 @@ class SCAEBONEAGE(LightningModule):
                                          reconstruction_target=reconstruction_target,
                                          label=label)
         out = {'val_loss': loss}
-        if model_params['scae_classification_params']['is_active']:
+        if self.scae.enable_classification:
             accuracy = self.scae.calculate_accuracy(res, label)
             cls_pred = self.scae.predict(res)
             out['accuracy'] = accuracy
@@ -226,7 +226,7 @@ class SCAEBONEAGE(LightningModule):
         avg_loss = torch.stack([x['val_loss'] for x in outputs]).mean()
         log = {'val_loss': avg_loss}
 
-        if model_params['scae_classification_params']['is_active']:
+        if self.scae.enable_classification:
             avg_acc = torch.stack([x['accuracy'] for x in outputs]).mean()
             log['val_accuracy'] = avg_acc
 
@@ -284,7 +284,7 @@ class SCAEBONEAGE(LightningModule):
         avg_loss = torch.stack([x['test_loss'] for x in outputs]).mean()
         log = {'test_loss': avg_loss}
 
-        if model_params['scae_classification_params']['is_active']:
+        if self.scae.enable_classification:
             avg_acc = torch.stack([x['accuracy'] for x in outputs]).mean()
             log['test_accuracy'] = avg_acc
 
