@@ -233,8 +233,6 @@ class SCAEBONEAGE(LightningModule):
         res = outputs[0]['result']
 
 
-
-
         # log image reconstructions
         n = min(self.hparams.batch_size, 8)
         recons = [res.image.cpu()[:n], res.rec.pdf.mode().cpu()[:n]]
